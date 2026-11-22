@@ -122,9 +122,11 @@ curl -sS -c "$COOKIE" -b "$COOKIE" "$BASE/tables/1" -o /tmp/p9b.html -w "详情�
 python3 -s - <<'PY'
 import re
 html = open('/tmp/p9b.html', encoding='utf-8').read()
-badges = re.findall(r'class="badge (\w+)">([^<]+)</span>', html)
+# 只统计“核对”列徽标（短码列的“已发”徽标不参与）：徽标前一个单元格是图序/短码，
+# 核对徽标固定为 ok/warn/err 三种样式
+badges = re.findall(r'class="badge (?:ok|warn|err)">([^<]+)</span>', html)
 from collections import Counter
-counts = Counter(label for _, label in badges)
+counts = Counter(badges)
 print("行级徽标统计:", dict(counts))
 assert counts.get("撤回准用") == 1, counts
 assert counts.get("署名有变") == 1, counts

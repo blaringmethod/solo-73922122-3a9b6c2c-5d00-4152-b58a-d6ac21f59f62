@@ -7,6 +7,11 @@ import sqlite3
 import time
 from contextlib import contextmanager
 
+# 短码取值区间：SHA-256（64 位小写十六进制）的最短可用前缀，限 6～12 位
+SHORT_CODE_MIN_LEN = 6
+SHORT_CODE_MAX_LEN = 12
+SHA256_HEX_LEN = 64
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +39,29 @@ CREATE TABLE IF NOT EXISTS drafts (
     hashes_json TEXT NOT NULL,
     result_json TEXT NOT NULL
 );
+
+-- 短码台账：同馆一码只对应一个完整摘要；同馆同图（完整摘要）只发一个码。
+-- 完整摘要以小写归一存储，查重/查回一律按大小写不敏感处理。
+CREATE TABLE IF NOT EXISTS short_codes (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    library_no   TEXT NOT NULL,
+    short_code   TEXT NOT NULL,
+    image_sha256 TEXT NOT NULL,
+    table_id     INTEGER,
+    created_at   REAL NOT NULL
+);
+-- 同馆短码唯一：保证“同馆一码只发给一个摘要”
+CREATE UNIQUE INDEX IF NOT EXISTS ux_short_codes_lib_code
+    ON short_codes (library_no, short_code);
+-- 同馆同图唯一：保证已发过的图沿用同馆原码
+CREATE UNIQUE INDEX IF NOT EXISTS ux_short_codes_lib_image
+    ON short_codes (library_no, image_sha256 COLLATE NOCASE);
+-- 发码查重只按相关前缀探测，走该索引，不扫描全馆台账
+CREATE INDEX IF NOT EXISTS ix_short_codes_lib_image_prefix
+    ON short_codes (library_no, image_sha256 COLLATE NOCASE);
+-- 来源台账按馆+图的前缀探测索引（含已撤回记录，撤回归档不删除）
+CREATE INDEX IF NOT EXISTS ix_sources_lib_image
+    ON sources (library_no, image_sha256 COLLATE NOCASE);
 """
 
 
@@ -174,3 +202,71 @@ def stats(conn: sqlite3.Connection) -> dict:
         "approved": row["approved"] or 0,
         "tables": tables,
     }
+
+
+# ---------- 纸质图录短码 ----------
+
+def get_short_codes_for_pairs(
+    conn: sqlite3.Connection, pairs: list[tuple[str, str]]
+) -> dict[tuple[str, str], sqlite3.Row]:
+    """按 (馆号, 完整摘要) 批量取已发短码；摘要大小写不敏感。"""
+    if not pairs:
+        return {}
+    out: dict[tuple[str, str], sqlite3.Row] = {}
+    # 单条参数化查询，避免 IN 行值在不同 SQLite 版本的兼容问题；每表 ≤100 图
+    for library_no, image_sha in pairs:
+        row = conn.execute(
+            "SELECT * FROM short_codes WHERE library_no = ? "
+            "AND image_sha256 = ? COLLATE NOCASE LIMIT 1",
+            (library_no, image_sha),
+        ).fetchone()
+        if row is not None:
+            out[(library_no, image_sha.lower())] = row
+    return out
+
+
+def find_short_code(conn: sqlite3.Connection, library_no: str, short_code: str) -> sqlite3.Row | None:
+    """网页查回：按馆号 + 已发短码精确取码记录（短码本身即小写）。"""
+    return conn.execute(
+        "SELECT * FROM short_codes WHERE library_no = ? AND short_code = ? LIMIT 1",
+        (library_no, short_code.lower()),
+    ).fetchone()
+
+
+def scan_registry_prefix(
+    conn: sqlite3.Connection, library_no: str, digest_lower: str
+) -> list[sqlite3.Row]:
+    """只探测该馆台账中与本摘要相关前缀的已发码记录。
+
+    条件 lower(image) LIKE 'abcdef%'：以候选码最小长度 6 位做前缀锚定，
+    走 (library_no, image_sha256 COLLATE NOCASE) 索引，不扫描全馆。
+    """
+    anchor = digest_lower[:SHORT_CODE_MIN_LEN]
+    return conn.execute(
+        "SELECT * FROM short_codes WHERE library_no = ? "
+        "AND image_sha256 LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        (library_no, anchor + "%"),
+    ).fetchall()
+
+
+def scan_sources_prefix(
+    conn: sqlite3.Connection, library_no: str, digest_lower: str
+) -> list[sqlite3.Row]:
+    """只探测该馆来源台账（含已撤回）中同前缀的完整摘要，大小写不敏感。"""
+    anchor = digest_lower[:SHORT_CODE_MIN_LEN]
+    return conn.execute(
+        "SELECT image_sha256, status FROM sources WHERE library_no = ? "
+        "AND image_sha256 LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        (library_no, anchor + "%"),
+    ).fetchall()
+
+
+def insert_short_code(
+    conn: sqlite3.Connection, library_no: str, short_code: str,
+    image_sha256: str, table_id: int | None,
+) -> None:
+    conn.execute(
+        "INSERT INTO short_codes (library_no, short_code, image_sha256, table_id, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (library_no, short_code, image_sha256.lower(), table_id, time.time()),
+    )

@@ -1,0 +1,7 @@
+﻿image_sha256,library_no,status,credit,summary
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,L01,approved,甲馆藏 / 王晋 摄,图一：青铜鼎全形
+aaaaaabaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,L01,approved,甲馆藏 / 李远 摄,图二：壁画供养人
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,L01,approved,甲馆藏 / 陈岚 摄,图三：写经卷首
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,L02,approved,乙馆藏 / 周禾 摄,图三：写经卷首（另一馆准用）
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd,L02,revoked,乙馆藏（已撤回）,图四：漆耳杯（撤回，仍参与查重）
+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz,L01,approved,甲馆藏 / 脏数据,图五：摘要非十六进制（发码应拒绝）

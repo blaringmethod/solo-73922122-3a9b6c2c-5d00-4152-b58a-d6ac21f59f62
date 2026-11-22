@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>短码查回 · 馆号 + 短码 → 原完整摘要</h2>
+  <p class="muted small">
+    纸质图录上每个图序印有短码（完整 SHA-256 的 6～12 位小写前缀）。
+    供图馆填写本馆馆号与图录短码，即可查回发码时登记的原完整摘要；
+    查询只走短码注册表，台账后来补入同前缀的图片不影响查回结果。
+  </p>
+  <form class="lookup-form" method="get" action="{{ url_for('code_lookup') }}">
+    <label>馆号
+      <input type="text" name="library_no" value="{{ library_no }}" placeholder="例如 L01" required>
+    </label>
+    <label>短码
+      <input type="text" name="code" value="{{ code }}" placeholder="6～12 位小写十六进制"
+             pattern="[0-9a-fA-F]{6,12}" minlength="6" maxlength="12" required>
+    </label>
+    <button class="btn" type="submit">查回原摘要</button>
+  </form>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  {% if outcome %}
+    <div class="flash success">查回成功：该短码在馆号 {{ outcome.library_no }} 下唯一对应以下完整摘要。</div>
+    <div class="result-box">
+      <dl>
+        <dt>馆号</dt><dd class="mono">{{ outcome.library_no }}</dd>
+        <dt>短码</dt><dd class="mono code-cell">{{ outcome.short_code }}</dd>
+        <dt>原完整摘要<br><span class="small muted">（SHA-256，64 位）</span></dt>
+        <dd class="mono">{{ outcome.image_sha256 }}</dd>
+        <dt>首发表号</dt>
+        <dd>{% if outcome.table_id %}<a href="{{ url_for('show_table', table_id=outcome.table_id) }}">#{{ outcome.table_id }}</a>{% else %}—{% endif %}</dd>
+        <dt>发码时间</dt><dd>{{ outcome.created_at | as_dt }}（东八区）</dd>
+      </dl>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

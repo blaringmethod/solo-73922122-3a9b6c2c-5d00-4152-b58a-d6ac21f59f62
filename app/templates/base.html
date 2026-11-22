@@ -52,6 +52,17 @@
                    padding:12px 0; border-top:1px solid var(--line); margin-top:16px; }
     .sel-count { font-weight:600; color:var(--accent); }
     .small { font-size:12.5px; }
+    .code-cell { font-size:14px; font-weight:700; letter-spacing:0.5px; background:#f0f7ff;
+                 border:1px solid #bfdbfe; border-radius:6px; padding:2px 8px; }
+    .code-list { columns:2; column-gap:40px; font-size:14px; }
+    .code-list li { margin-bottom:6px; break-inside:avoid; }
+    .lookup-form { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:10px 0 18px; }
+    .lookup-form input { padding:8px 10px; border:1px solid var(--line); border-radius:7px;
+                         font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; min-width:220px; }
+    .result-box { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+    .result-box dl { display:grid; grid-template-columns:130px 1fr; gap:8px 14px; margin:0; }
+    .result-box dt { color:var(--muted); font-size:13px; }
+    .result-box dd { margin:0; word-break:break-all; }
   </style>
 </head>
 <body>
@@ -61,6 +72,7 @@
     <a href="{{ url_for('index') }}">台账总览</a>
     <a href="{{ url_for('select_images') }}">选图出表</a>
     <a href="{{ url_for('tables_index') }}">已确认表查询</a>
+    <a href="{{ url_for('code_lookup') }}">短码查回</a>
   </nav>
 </header>
 <main>

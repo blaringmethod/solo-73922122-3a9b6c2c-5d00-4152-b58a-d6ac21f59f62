@@ -16,6 +16,7 @@ from flask import (
     url_for,
 )
 
+from .codes import CodeError, issue_codes_for_table, lookup_short_code
 from .ledger import LedgerError, import_ledger
 from .recheck import diff_results, recheck_confirmed
 from .solver import MAX_IMAGES, SolveError, same_table, solve
@@ -25,6 +26,7 @@ from .storage import (
     fetch_sources,
     get_confirmed,
     get_draft,
+    get_short_codes_for_pairs,
     list_confirmed,
     prune_drafts,
     save_confirmed,
@@ -199,12 +201,61 @@ def create_app(db_path: str | None = None) -> Flask:
             payload = json.loads(row["payload_json"])
             sources = fetch_sources(conn, [e["image_sha256"] for e in payload["entries"]])
             report = recheck_confirmed(payload, sources)
+            pairs = [(e["library_no"], e["image_sha256"]) for e in payload["entries"]]
+            code_rows = get_short_codes_for_pairs(conn, pairs)
+            code_map = {
+                (e["library_no"], e["image_sha256"].lower()):
+                    code_rows.get((e["library_no"], e["image_sha256"].lower()))
+                for e in payload["entries"]
+            }
         return render_template(
             "table_detail.html",
             table_id=table_id,
             payload=payload,
             report=report,
             confirmed_at=row["confirmed_at"],
+            code_map=code_map,
+        )
+
+    # ---------- 整表发码（纸质图录短码） ----------
+    @app.route("/tables/<int:table_id>/issue-codes", methods=["POST"])
+    def issue_table_codes(table_id: int):
+        try:
+            with db() as conn:
+                row = get_confirmed(conn, table_id)
+                if row is None:
+                    abort(404)
+                payload = json.loads(row["payload_json"])
+                outcome = issue_codes_for_table(conn, payload, table_id)
+        except CodeError as exc:
+            flash(f"整表未发新码：{exc}", "error")
+            return redirect(url_for("show_table", table_id=table_id))
+        flash(
+            f"短码发放完成：共 {outcome['total']} 张图，新发 {outcome['new_count']} 个、"
+            f"沿用同馆原码 {outcome['reused_count']} 个；短码为 6～12 位小写前缀，已按图序排列供排版。",
+            "success",
+        )
+        return redirect(url_for("show_table", table_id=table_id))
+
+    # ---------- 按馆号 + 短码查回原完整摘要 ----------
+    @app.route("/codes/lookup")
+    def code_lookup():
+        library_no = request.args.get("library_no", "")
+        code = request.args.get("code", "")
+        outcome = None
+        error = None
+        if library_no or code:
+            try:
+                with db() as conn:
+                    outcome = lookup_short_code(conn, library_no, code)
+            except CodeError as exc:
+                error = str(exc)
+        return render_template(
+            "code_lookup.html",
+            library_no=library_no,
+            code=code,
+            outcome=outcome,
+            error=error,
         )
 
     @app.errorhandler(413)
